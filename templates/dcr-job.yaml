@@ -17,7 +17,7 @@ metadata:
   name: dcr
 data:
   register.sh: |
-{{ .Files.Get "scripts/register.sh" | indent 4 }}
+{{ tpl (.Files.Get "scripts/register.sh") . | indent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -61,6 +61,11 @@ spec:
           volumeMounts:
             - name: dcr-volume
               mountPath: /mnt/dcr
+            {{- if and (not .Values.tls.insecure) (ne .Values.tls.certificate "") }}
+            - name: ca-volume
+              mountPath: /usr/local/share/ca-certificates/ca.crt
+              subPath: ca.crt
+            {{- end }}
           ports:
             - containerPort: 80
               name: http
@@ -71,5 +76,9 @@ spec:
           configMap:
             defaultMode: 493
             name: dcr
+        {{- if and (not .Values.tls.insecure) (ne .Values.tls.certificate "") }}
+        - name: ca-volume
+          secret:
+            secretName: {{ $.Values.tls.certificate }}
+        {{- end }}
       restartPolicy: Never
-
