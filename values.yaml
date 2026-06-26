@@ -6,6 +6,9 @@ registration_url: ""
 # DCR information use to build the JSON request
 request: {}
 # Name of the secret being created, default is the chart name
+tls:
+  insecure : false 
+  certificate : "" # provide a certificate to dcr job using trust-manager
 secret: ""
 security:
   # Name of the service account
