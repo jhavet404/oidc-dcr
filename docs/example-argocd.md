@@ -2,7 +2,7 @@
 
 ArgoCD OIDC integration allows users to connect to the application using an external OpenID Connect (OIDC) identity provider. This process is automated using the OIDC-DCR chart.
 
-Since ArgoCD does not natively support dynamic `client_id` injection via environment variables or external secrets, a Kubernetes Job acts as a middleware between the DCR job and the ArgoCD configmap.
+The complexity of this integration lies in a major incompatibility: the DCR protocol generates a random `client_id` (in UUIDv4 format) that is stored in a Kubernetes Secret by the `dcr` job, but ArgoCD's values file does not natively support injecting a ClientID directly from an external secret or environment variable. To bridge this gap, an `argocd-cm-patch` job acts as a middleware, using Helm hooks to trigger at the end of the chart installation alongside the DCR job. Because the DCR job has a Helm hook weight of -5, it executes with higher priority. Therefore, when the patch job runs, the Kubernetes secret is already available, allowing it to extract the `client_id` and `client_secret` and inject them directly into the ArgoCD ConfigMap.
 
 ## Chart configuration
 
@@ -73,7 +73,7 @@ oidc-dcr:
 
 ## Patch job
 
-A patch job is defined in `templates/argocd-cm-patch.yaml` to bridge the gap between the DCR job (which generates a dynamic `client_id`) and ArgoCD (which does not natively support values injections for other variables than `client_secret`).
+Since ArgoCD does not natively support dynamic `client_id` injection via environment variables or external secrets, a Kubernetes Job is defined in `templates/argocd-cm-patch.yaml` and acts as a middleware between the DCR job and the ArgoCD configmap.
 
 This job executes post-installation or post-upgrade. It waits for the `oidc-dcr` job to generate the required secret, extracts the generated Client ID and Client Secret, and directly patches the `argocd-cm` ConfigMap.
 
@@ -84,7 +84,7 @@ metadata:
   name: argocd-cm-patcher
   namespace: argocd
   annotations:
-    # The job is executed right after the Helm install/upgrade command (but after the DCR job, which has a hook weight giving it higher priority).
+    # The job is executed right after the Helm install/upgrade command (but after the DCR job, which has a negative hook weight giving it a higher priority).
     helm.sh/hook: post-install,post-upgrade
     # Ensure that Helm correctly handles the job deletion after execution, or replaces it when the job is re-created in case of error.
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
