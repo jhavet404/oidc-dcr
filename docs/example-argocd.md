@@ -1,10 +1,10 @@
 # Example - ArgoCD
 
-ArgoCD oidc integration allow the user to connect to the application using an OIDC provider
+ArgoCD OIDC integration allows users to connect to the application using an external OpenID Connect (OIDC) identity provider. This process is automated using the OIDC-DCR chart.
 
 ## Chart configuration
 
-`oidc-dcr` chart is added as dependancy to the chart.
+`oidc-dcr` chart is added as a dependency to the main chart alongside ArgoCD.
 
 ```yaml
 apiVersion: v2
@@ -21,13 +21,13 @@ dependencies:
 
 ## Values file
 
-As the chart is multi-dependancy, the `argo-cd` and `oidc-dcr` values are nested into their corresponding parent chart name.
+Because this is a multi-dependency chart, the configuration keys for both ArgoCD and OIDC-DCR must be nested under their respective parent chart names.
 
-### ArgoCD
+### ArgoCD configuration (RBAC)
 
-On ArgoCD, the permissions must be set in the value file to give specific permission to the user that will connect to the application using OIDC.
+To allow users authenticating via OIDC to interact with the application, appropriate permissions must be defined in the values file.
 
-`configs.rbac` value is set with the `policy.csv` value, that allow to give permissions to a specific user or group. The `scopes` policy defines which scope the second column of the policy must match.
+The `policy.csv` key, under `configs.rbac`, defines the access policies. The scopes setting specifies which token claim (such as [email]) will be evaluated against the second column of the RBAC policy.
 
 Read the [official ArgoCD documentation about RBAC Configuration](https://argo-cd.readthedocs.io/en/stable/operator-manual/rbac/) to learn more.
 
@@ -41,17 +41,14 @@ argo-cd:
   # ...other configuration values
 ```
 
-### OIDC-DCR
+### OIDC-DCR configuration
 
-On OIDC-DCR, a minimal configuration is needed.
+A minimal configuration is required for the OIDC-DCR component to handle dynamic client registration:
 
-The `registration_url` must be set following the [configuration section oof README.md](https://github.com/adaltas/oidc-dcr/blob/main/README.md#configuration).
-
-The `request` value needed to create a working application is just the `redirect_uri` that has to be set to the ArgoCD root URL followed by `/auth/callback`.
-
-The secret name must be set to `argo-dcr` as this is the name that is used in the next section template file.
-
-The `use_default` value needs to be set to `true` OR the `client_id` and `client_secret` values needs to be manually set to `.client_id` and `.client_secret`.
+- The `registration_url` value must be set to the dynamic client registration URL provided by your OIDC identity provider.
+- The `request` key must be filled with the `redirect_uris` that indicates the ArgoCD callback url (see example below).
+- The `secret` must be set to `argo-dcr` to match the target name used by the patch job in the next section.
+- The `use_default` value needs to be set to `true` OR the `client_id` and `client_secret` values needs to be manually set to `.client_id` and `.client_secret`.
 
 ```yaml
 oidc-dcr:
@@ -59,7 +56,7 @@ oidc-dcr:
   request:
     client_name: "ArgoCD"
     redirect_uris:
-      - "https://<APP_URL>/auth/callback"
+      - "https://<ARGOCD_URL>/auth/callback"
   secret: "argo-dcr"
   mapping:
     # First choice (easier)
@@ -74,11 +71,11 @@ oidc-dcr:
 
 ## Patch job
 
-A job is created in a `templates/argocd-cm-patch.yaml` file.
+Since ArgoCD does not natively support dynamic `client_id` injection via environment variables or external secrets, a Kubernetes Job acts as a middleware.
 
-It is used as a middleware between the DCR job and the ArgoCD configmap as ArgoCD does not natively support `client_id` injection (and don't use an env variable that can be set).
+This job is created in a `templates/argocd-cm-patch.yaml` file
 
-It waits for the DCR job to finish and then patches the ArgoCD configmap with the OIDC configuration (issuer URL, client ID and secret).
+This job executes post-installation or post-upgrade. It waits for the `oidc-dcr` job to generate the required secret, extracts the generated Client ID and Client Secret, and directly patches the `argocd-cm` ConfigMap.
 
 ```yaml
 apiVersion: batch/v1
@@ -122,7 +119,7 @@ spec:
               fi
 
               echo "Client ID found: ${CLIENT_ID}"
-              echo "Client secret found: ${CLIENT_ID}"
+              echo "Client secret retrieved successfully."
 
               # Patch the ArgoCD configmap with the OIDC configuration
               kubectl patch configmap argocd-cm -n argocd --type merge -p "$(cat <<EOF
