@@ -1,0 +1,9 @@
+{
+  "bump-minor-pre-major": true,
+  "packages": {
+    ".": {
+      "release-type": "helm",
+      "initial-version": "0.1.0"
+    }
+  }
+}
