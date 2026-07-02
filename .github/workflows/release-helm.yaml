@@ -1,0 +1,38 @@
+name: Publish Helm Chart to Quay
+on:
+  release:
+    types: [published]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: "latest"
+
+      - name: Log in to Quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | helm registry login quay.io \
+            --username "${{ secrets.QUAY_USERNAME }}" \
+            --password-stdin
+
+      - name: Update Chart Version from Tag
+        run: |
+          # Extract version number from the tag
+          TAG_VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          # Edit Chart.yaml
+          echo "Updating Chart.yaml with version: $TAG_VERSION"
+          yq -i ".version = \"$TAG_VERSION\"" Chart.yaml
+
+      - name: Package Helm Chart
+        run: |
+          helm package . --destination .dist
+
+      - name: Push Chart to Quay (OCI)
+        run: |
+          CHART_PACKAGE=$(ls .dist/*.tgz)
+          helm push "$CHART_PACKAGE" oci://quay.io/jhavet404
