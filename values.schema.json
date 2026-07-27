@@ -114,7 +114,8 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "type": "string", "format": "uri" }
-        }
+        },
+        "scope": { "type": "string" }
       },
       "additionalProperties": false,
       "required": ["redirect_uris"],
