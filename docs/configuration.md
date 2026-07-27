@@ -40,6 +40,8 @@ The Helm chart is configured with the following properties.
     URL of the home page of the client application. (Default: `""`)
   - `token_endpoint_auth_method`  
     Authentication method used by the client at the token endpoint. Supported values include `client_secret_basic`, `client_secret_post`, `client_secret_jwt`, `private_key_jwt`, and `none`. Using none creates a public client (client without secret) (Default: `client_secret_basic`)
+  - `scope`
+    Space-separated list of OAuth 2.0 scopes that the client restricts itself to using. (when not specified, the provider may assign all the default client scopes)
 
 - `tls`
   Use of TLS in client creation via the DCR API.
